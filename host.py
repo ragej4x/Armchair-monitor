@@ -10,7 +10,7 @@ import json
 class PaintApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Armchair Monitor ")
+        self.root.title("Armchair Monitor")
 
         self.brush_color = "black"
         self.eraser_color = "white"
@@ -18,18 +18,18 @@ class PaintApp:
         self.tool = "brush"
         self.start_x = None
         self.start_y = None
-        self.selection_rectangle = None
-        self.selected_item = None
         self.image = Image.new("RGB", (1024, 600), "white")
         self.draw = ImageDraw.Draw(self.image)
 
-        #SEVER
+        # Server setup
         self.clients = []
+        self.clients_lock = threading.Lock()
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.server_socket.bind(("localhost", 12345))
+        self.server_socket.bind(("192.168.1.7", 9999))
         self.server_socket.listen(5)
         threading.Thread(target=self.accept_clients, daemon=True).start()
 
+        # GUI layout
         self.layout = Frame(self.root)
         self.layout.pack(fill=tk.BOTH, expand=True)
 
@@ -43,30 +43,49 @@ class PaintApp:
         self.canvas.bind("<ButtonRelease-1>", self.end_draw)
 
     def accept_clients(self):
+        """Accept incoming client connections."""
         while True:
             client_socket, addr = self.server_socket.accept()
             print(f"Client connected: {addr}")
-            self.clients.append(client_socket)
+            with self.clients_lock:
+                self.clients.append(client_socket)
             threading.Thread(target=self.handle_client, args=(client_socket,), daemon=True).start()
 
     def handle_client(self, client_socket):
+        """Handle communication with a single client."""
+        data_buffer = ""
         while True:
             try:
-                data = client_socket.recv(1024).decode()
-                if data:
-                    pass 
-            except (ConnectionResetError, BrokenPipeError):
-                self.clients.remove(client_socket)
+                chunk = client_socket.recv(4096).decode()
+                if not chunk:
+                    break
+                data_buffer += chunk
+                while "\n" in data_buffer:
+                    message, data_buffer = data_buffer.split("\n", 1)
+                    action = json.loads(message)
+                    print(f"Received action: {action}")
+                    # Process client action (if needed)
+            except (ConnectionResetError, BrokenPipeError, json.JSONDecodeError):
                 break
+        with self.clients_lock:
+            self.clients.remove(client_socket)
+        print("Client disconnected.")
 
     def broadcast(self, message):
-        for client in self.clients:
-            try:
-                client.sendall(message.encode())
-            except (ConnectionResetError, BrokenPipeError):
+        """Send a message to all connected clients."""
+        with self.clients_lock:
+            to_remove = []
+            for client in self.clients:
+                try:
+                    client.sendall((message + "\n").encode())
+                except (ConnectionResetError, BrokenPipeError):
+                    to_remove.append(client)
+            for client in to_remove:
                 self.clients.remove(client)
+                print("Removed unresponsive client.")
 
     def create_toolbar(self):
+        """Create the toolbar with tools and options."""
         toolbar = Frame(self.layout)
         toolbar.pack(side=tk.LEFT, fill=tk.Y)
 
@@ -76,11 +95,11 @@ class PaintApp:
         Button(toolbar, text="Rectangle", command=lambda: self.select_tool("rectangle")).pack(padx=2, pady=2)
         Button(toolbar, text="Oval", command=lambda: self.select_tool("oval")).pack(padx=2, pady=2)
         Button(toolbar, text="Text", command=lambda: self.select_tool("text")).pack(padx=2, pady=2)
-        Button(toolbar, text="Select", command=lambda: self.select_tool("select")).pack(padx=2, pady=2)
         Button(toolbar, text="Color", command=self.choose_color).pack(padx=2, pady=2)
         tk.Scale(toolbar, from_=1, to=100, orient=tk.HORIZONTAL, label="Brush Size", command=self.change_brush_size).pack(padx=2, pady=2)
         Button(toolbar, text="Save", command=self.save_image).pack(padx=2, pady=2)
         Button(toolbar, text="Clear", command=self.clear_canvas).pack(padx=2, pady=2)
+        Button(toolbar, text="Shutdown", command=self.shutdown_server).pack(padx=2, pady=2)
 
     def select_tool(self, tool):
         self.tool = tool
@@ -112,6 +131,10 @@ class PaintApp:
             self.add_text(event)
 
     def draw_action(self, action, x1, y1, x2, y2, color=None):
+        if not (0 <= x1 <= 1024 and 0 <= y1 <= 600 and 0 <= x2 <= 1024 and 0 <= y2 <= 600):
+            print(f"Invalid coordinates: {x1}, {y1}, {x2}, {y2}")
+            return  # Ignore invalid coordinates
+
         if action == "line":
             color = color or self.brush_color
             self.canvas.create_line(x1, y1, x2, y2, fill=color, width=self.brush_size, capstyle=tk.ROUND, smooth=True)
@@ -123,7 +146,6 @@ class PaintApp:
             self.canvas.create_oval(x1, y1, x2, y2, outline=self.brush_color, width=self.brush_size)
             self.draw.ellipse([x1, y1, x2, y2], outline=self.brush_color, width=self.brush_size)
 
-        # Abnormal yung send packets coordinates (d2)
         self.broadcast(json.dumps({
             "action": action,
             "x1": x1, "y1": y1,
@@ -159,6 +181,15 @@ class PaintApp:
         file_path = filedialog.asksaveasfilename(defaultextension=".png", filetypes=[("PNG files", "*.png"), ("All files", "*.*")])
         if file_path:
             self.image.save(file_path)
+
+    def shutdown_server(self):
+        with self.clients_lock:
+            for client in self.clients:
+                client.close()
+            self.clients = []
+        self.server_socket.close()
+        print("Server shutdown.")
+        self.root.quit()
 
 
 root = tk.Tk()

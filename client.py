@@ -1,62 +1,82 @@
 import tkinter as tk
 from tkinter import simpledialog
-from PIL import Image, ImageDraw, ImageTk
+from tkinter.ttk import Frame
 import socket
 import threading
 import json
 
 
 class PaintClient:
-    def __init__(self, root):
+    def __init__(self, root, server_ip, server_port):
         self.root = root
-        self.root.title("Paint Client")
+        self.root.title("Armchair Monitor - Client")
 
+        # Connection settings
+        self.server_ip = server_ip
+        self.server_port = server_port
+        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+        # UI settings
+        self.canvas = tk.Canvas(root, bg="white", width=800, height=600)
+        self.canvas.pack(fill=tk.BOTH, expand=True)
+
+        # Canvas bindings
+        self.canvas.bind("<B1-Motion>", self.paint)
+        self.canvas.bind("<Button-1>", self.start_draw)
+        self.canvas.bind("<ButtonRelease-1>", self.end_draw)
+
+        # Drawing settings
         self.brush_color = "black"
         self.eraser_color = "white"
         self.brush_size = 5
-        self.image = Image.new("RGB", (1024, 600), "white")
-        self.draw = ImageDraw.Draw(self.image)
+        self.start_x = None
+        self.start_y = None
 
-        self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.host = "127.0.0.1" 
-        self.port = 12345
+        # Background image (white canvas)
+        self.canvas_image = self.canvas.create_rectangle(0, 0, 800, 600, fill="white", outline="")
+
+        # Connect to the server
         self.connect_to_server()
 
-        self.canvas = tk.Canvas(self.root, bg="white", width=800, height=600)
-        self.canvas.pack(fill=tk.BOTH, expand=True)
-
-        threading.Thread(target=self.receive_updates, daemon=True).start()
+        # Start listening for server updates
+        threading.Thread(target=self.listen_for_updates, daemon=True).start()
 
     def connect_to_server(self):
         try:
-            self.client_socket.connect(('localhost', self.port))
-            print("Connected to the server!")
+            self.socket.connect((self.server_ip, self.server_port))
+            print("Connected to the server.")
         except Exception as e:
-            print(f"Failed to connect to the server: {e}")
+            print(f"Unable to connect to the server: {e}")
             self.root.destroy()
 
-    def receive_updates(self):
+    def listen_for_updates(self):
+        data_buffer = ""
         while True:
             try:
-                data = self.client_socket.recv(1024).decode()
-                if data:
-                    action = json.loads(data)
-                    self.process_action(action)
+                chunk = self.socket.recv(4096).decode()
+                if not chunk:
+                    break
+                data_buffer += chunk
+                while "\n" in data_buffer:
+                    message, data_buffer = data_buffer.split("\n", 1)
+                    action = json.loads(message)
+                    self.handle_server_action(action)
             except (ConnectionResetError, json.JSONDecodeError):
-                print("Disconnected from server.")
+                print("Disconnected from the server.")
                 break
+        self.socket.close()
 
-    def process_action(self, action):
-        act = action.get("action")
-        if act == "line":
+    def handle_server_action(self, action):
+        action_type = action.get("action")
+        if action_type == "line":
             self.draw_line(action)
-        elif act == "rectangle":
+        elif action_type == "rectangle":
             self.draw_rectangle(action)
-        elif act == "oval":
+        elif action_type == "oval":
             self.draw_oval(action)
-        elif act == "text":
+        elif action_type == "text":
             self.draw_text(action)
-        elif act == "clear":
+        elif action_type == "clear":
             self.clear_canvas()
 
     def draw_line(self, action):
@@ -64,36 +84,66 @@ class PaintClient:
         color = action["color"]
         width = action["width"]
         self.canvas.create_line(x1, y1, x2, y2, fill=color, width=width, capstyle=tk.ROUND, smooth=True)
-        self.draw.line([x1, y1, x2, y2], fill=color, width=width)
 
     def draw_rectangle(self, action):
         x1, y1, x2, y2 = action["x1"], action["y1"], action["x2"], action["y2"]
         color = action["color"]
         width = action["width"]
         self.canvas.create_rectangle(x1, y1, x2, y2, outline=color, width=width)
-        self.draw.rectangle([x1, y1, x2, y2], outline=color, width=width)
 
     def draw_oval(self, action):
         x1, y1, x2, y2 = action["x1"], action["y1"], action["x2"], action["y2"]
         color = action["color"]
         width = action["width"]
         self.canvas.create_oval(x1, y1, x2, y2, outline=color, width=width)
-        self.draw.ellipse([x1, y1, x2, y2], outline=color, width=width)
 
     def draw_text(self, action):
-        x, y = action["x"], action["y"]
-        text = action["text"]
-        color = action["color"]
-        size = action["size"]
+        x, y, text, color, size = action["x"], action["y"], action["text"], action["color"], action["size"]
         self.canvas.create_text(x, y, text=text, fill=color, font=("Arial", size))
-        self.draw.text((x, y), text, fill=color)
 
     def clear_canvas(self):
         self.canvas.delete("all")
-        self.image = Image.new("RGB", (1024, 600), "white")
-        self.draw = ImageDraw.Draw(self.image)
+        self.canvas.create_rectangle(0, 0, 800, 600, fill="white", outline="")
+
+    def paint(self, event):
+        x, y = event.x, event.y
+        self.draw_action("line", self.start_x, self.start_y, x, y)
+        self.start_x, self.start_y = x, y
+
+    def start_draw(self, event):
+        self.start_x, self.start_y = event.x, event.y
+
+    def end_draw(self, event):
+        pass
+
+    def draw_action(self, action_type, x1, y1, x2, y2):
+        if x1 is None or y1 is None:
+            return
+
+        if action_type == "line":
+            self.canvas.create_line(x1, y1, x2, y2, fill=self.brush_color, width=self.brush_size, capstyle=tk.ROUND, smooth=True)
+
+        self.send_action_to_server({
+            "action": action_type,
+            "x1": x1, "y1": y1,
+            "x2": x2, "y2": y2,
+            "color": self.brush_color,
+            "width": self.brush_size
+        })
+
+    def send_action_to_server(self, action):
+        try:
+            self.socket.sendall((json.dumps(action) + "\n").encode())
+        except Exception as e:
+            print(f"Error sending action to server: {e}")
 
 
-root = tk.Tk()
-app = PaintClient(root)
-root.mainloop()
+# Start the client
+if __name__ == "__main__":
+    root = tk.Tk()
+    root.withdraw()  # Hide the root window temporarily
+    server_ip = simpledialog.askstring("Server IP", "Enter server IP:")
+    root.deiconify()  # Show the root window after getting the server IP
+    server_port = 9999
+    app = PaintClient(root, server_ip, server_port)
+    root.mainloop()
