@@ -11,34 +11,31 @@ class PaintClient:
         self.root = root
         self.root.title("Armchair Monitor - Client")
 
-        # Connection settings
         self.server_ip = server_ip
         self.server_port = server_port
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-        # UI settings
         self.canvas = tk.Canvas(root, bg="white", width=800, height=600)
         self.canvas.pack(fill=tk.BOTH, expand=True)
 
-        # Canvas bindings
         self.canvas.bind("<B1-Motion>", self.paint)
         self.canvas.bind("<Button-1>", self.start_draw)
         self.canvas.bind("<ButtonRelease-1>", self.end_draw)
 
-        # Drawing settings
         self.brush_color = "black"
         self.eraser_color = "white"
         self.brush_size = 5
         self.start_x = None
         self.start_y = None
 
-        # Background image (white canvas)
         self.canvas_image = self.canvas.create_rectangle(0, 0, 800, 600, fill="white", outline="")
 
-        # Connect to the server
         self.connect_to_server()
 
-        # Start listening for server updates
+        #if ever nag loloko uncomment nyo lng ung time.sleep
+        #time.sleep(0.1)
+
+
         threading.Thread(target=self.listen_for_updates, daemon=True).start()
 
     def connect_to_server(self):
@@ -138,12 +135,10 @@ class PaintClient:
             print(f"Error sending action to server: {e}")
 
 
-# Start the client
-if __name__ == "__main__":
-    root = tk.Tk()
-    root.withdraw()  # Hide the root window temporarily
-    server_ip = simpledialog.askstring("Server IP", "Enter server IP:")
-    root.deiconify()  # Show the root window after getting the server IP
-    server_port = 9999
-    app = PaintClient(root, server_ip, server_port)
-    root.mainloop()
+root = tk.Tk()
+root.withdraw() 
+server_ip = simpledialog.askstring("Server IP", "Enter server IP, example 127.0.0.1")
+root.deiconify() 
+server_port = 9999
+app = PaintClient(root, server_ip, server_port)
+root.mainloop()

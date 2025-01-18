@@ -21,7 +21,7 @@ class PaintApp:
         self.image = Image.new("RGB", (1024, 600), "white")
         self.draw = ImageDraw.Draw(self.image)
 
-        # Server setup
+        # sserver setup
         self.clients = []
         self.clients_lock = threading.Lock()
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -29,7 +29,6 @@ class PaintApp:
         self.server_socket.listen(5)
         threading.Thread(target=self.accept_clients, daemon=True).start()
 
-        # GUI layout
         self.layout = Frame(self.root)
         self.layout.pack(fill=tk.BOTH, expand=True)
 
@@ -43,7 +42,6 @@ class PaintApp:
         self.canvas.bind("<ButtonRelease-1>", self.end_draw)
 
     def accept_clients(self):
-        """Accept incoming client connections."""
         while True:
             client_socket, addr = self.server_socket.accept()
             print(f"Client connected: {addr}")
@@ -52,10 +50,10 @@ class PaintApp:
             threading.Thread(target=self.handle_client, args=(client_socket,), daemon=True).start()
 
     def handle_client(self, client_socket):
-        """Handle communication with a single client."""
         data_buffer = ""
         while True:
             try:
+                #increas lng ung buffer pag nag ddiscon
                 chunk = client_socket.recv(4096).decode()
                 if not chunk:
                     break
@@ -64,7 +62,6 @@ class PaintApp:
                     message, data_buffer = data_buffer.split("\n", 1)
                     action = json.loads(message)
                     print(f"Received action: {action}")
-                    # Process client action (if needed)
             except (ConnectionResetError, BrokenPipeError, json.JSONDecodeError):
                 break
         with self.clients_lock:
@@ -72,7 +69,6 @@ class PaintApp:
         print("Client disconnected.")
 
     def broadcast(self, message):
-        """Send a message to all connected clients."""
         with self.clients_lock:
             to_remove = []
             for client in self.clients:
@@ -85,7 +81,6 @@ class PaintApp:
                 print("Removed unresponsive client.")
 
     def create_toolbar(self):
-        """Create the toolbar with tools and options."""
         toolbar = Frame(self.layout)
         toolbar.pack(side=tk.LEFT, fill=tk.Y)
 
@@ -99,7 +94,7 @@ class PaintApp:
         tk.Scale(toolbar, from_=1, to=100, orient=tk.HORIZONTAL, label="Brush Size", command=self.change_brush_size).pack(padx=2, pady=2)
         Button(toolbar, text="Save", command=self.save_image).pack(padx=2, pady=2)
         Button(toolbar, text="Clear", command=self.clear_canvas).pack(padx=2, pady=2)
-        Button(toolbar, text="Shutdown", command=self.shutdown_server).pack(padx=2, pady=2)
+        #Button(toolbar, text="Shutdown", command=self.shutdown_server).pack(padx=2, pady=2)
 
     def select_tool(self, tool):
         self.tool = tool
@@ -133,7 +128,7 @@ class PaintApp:
     def draw_action(self, action, x1, y1, x2, y2, color=None):
         if not (0 <= x1 <= 1024 and 0 <= y1 <= 600 and 0 <= x2 <= 1024 and 0 <= y2 <= 600):
             print(f"Invalid coordinates: {x1}, {y1}, {x2}, {y2}")
-            return  # Ignore invalid coordinates
+            return  #invalid coords
 
         if action == "line":
             color = color or self.brush_color
