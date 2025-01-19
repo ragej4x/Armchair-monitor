@@ -10,7 +10,7 @@ import json
 class PaintApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Armchair Monitor")
+       
 
         self.brush_color = "black"
         self.eraser_color = "white"
@@ -21,11 +21,16 @@ class PaintApp:
         self.image = Image.new("RGB", (1024, 600), "white")
         self.draw = ImageDraw.Draw(self.image)
 
+
+        
+        self.name = socket.gethostname()
+        self.root.title(f"Armchair Monitor (IPv4: {socket.gethostbyname(self.name)})")
+
         # sserver setup
         self.clients = []
         self.clients_lock = threading.Lock()
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.server_socket.bind(("192.168.1.7", 9999))
+        self.server_socket.bind((socket.gethostbyname(self.name), 9999))
         self.server_socket.listen(5)
         threading.Thread(target=self.accept_clients, daemon=True).start()
 
@@ -91,7 +96,7 @@ class PaintApp:
         Button(toolbar, text="Oval", command=lambda: self.select_tool("oval")).pack(padx=2, pady=2)
         Button(toolbar, text="Text", command=lambda: self.select_tool("text")).pack(padx=2, pady=2)
         Button(toolbar, text="Color", command=self.choose_color).pack(padx=2, pady=2)
-        tk.Scale(toolbar, from_=1, to=100, orient=tk.HORIZONTAL, label="Brush Size", command=self.change_brush_size).pack(padx=2, pady=2)
+        tk.Scale(toolbar, from_=1, to=100, orient=tk.HORIZONTAL, label="   Brush Size", command=self.change_brush_size).pack(padx=2, pady=2)
         Button(toolbar, text="Save", command=self.save_image).pack(padx=2, pady=2)
         Button(toolbar, text="Clear", command=self.clear_canvas).pack(padx=2, pady=2)
         #Button(toolbar, text="Shutdown", command=self.shutdown_server).pack(padx=2, pady=2)
