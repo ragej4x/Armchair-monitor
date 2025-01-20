@@ -23,23 +23,26 @@ class PaintApp:
 
 
         
-        self.name = socket.gethostname()
-        self.root.title(f"Armchair Monitor (IPv4: {socket.gethostbyname(self.name)})")
 
         # sserver setup
         self.clients = []
         self.clients_lock = threading.Lock()
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.server_socket.bind((socket.gethostbyname(self.name), 9999))
+        self.ip = socket.gethostname()
+
+        self.server_socket.bind((str(socket.gethostbyname(socket.gethostname())), 9999))
         self.server_socket.listen(5)
         threading.Thread(target=self.accept_clients, daemon=True).start()
 
         self.layout = Frame(self.root)
         self.layout.pack(fill=tk.BOTH, expand=True)
 
+        self.root.title(f"Armchair Monitor (IPv4: {socket.gethostbyname(socket.gethostname())})")
+
+
         self.create_toolbar()
 
-        self.canvas = tk.Canvas(self.layout, bg="white", width=800, height=600, cursor="cross")
+        self.canvas = tk.Canvas(self.layout, bg="white", width=1280, height=720, cursor="cross")
         self.canvas.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
 
         self.canvas.bind("<B1-Motion>", self.paint)
